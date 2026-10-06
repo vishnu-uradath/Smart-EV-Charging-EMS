@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Smart EV Energy Management System</title>
+
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+
+<style>
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Arial, Helvetica, sans-serif;
+  background: #f4f7fb;
+  color: #1f2937;
+}
+
+header {
+  background: #111827;
+  color: white;
+  padding: 22px 30px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+header h1 {
+  margin: 0;
+  font-size: 23px;
+}
+
+.connection {
+  padding: 8px 14px;
+  border-radius: 20px;
+  font-weight: bold;
+}
+
+.connected {
+  background: #166534;
+}
+
+.disconnected {
+  background: #991b1b;
+}
+
+.container {
+  max-width: 1250px;
+  margin: auto;
+  padding: 28px;
+}
+
+.section-title {
+  margin: 28px 0 16px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 18px;
+}
+
+.card {
+  background: white;
+  padding: 22px;
+  border-radius: 14px;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+}
+
+.card-title {
+  color: #6b7280;
+  font-size: 13px;
+  font-weight: bold;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+.value {
+  font-size: 29px;
+  font-weight: bold;
+}
+
+.unit {
+  font-size: 15px;
+  color: #6b7280;
+}
+
+/* ENERGY */
+
+.energy-card {
+  position: relative;
+}
+
+.energy-bar {
+  height: 10px;
+  background: #e5e7eb;
+  margin-top: 15px;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.energy-fill {
+  height: 100%;
+  transition: width 0.4s;
+}
+
+.solar-fill {
+  background: #f59e0b;
+}
+
+.grid-fill {
+  background: #3b82f6;
+}
+
+.available-fill {
+  background: #22c55e;
+}
+
+/* STATION */
+
+.station-panel {
+  margin-top: 25px;
+  background: white;
+  padding: 24px;
+  border-radius: 14px;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+}
+
+.load-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.load-bar {
+  height: 17px;
+  background: #e5e7eb;
+  border-radius: 20px;
+  overflow: hidden;
+}
+
+.load-fill {
+  height: 100%;
+  background: #2563eb;
+  width: 0%;
+  transition: width 0.4s;
+}
+
+.status {
+  margin-top: 18px;
+  padding: 14px;
+  border-radius: 8px;
+  text-align: center;
+  font-weight: bold;
+}
+
+.normal {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.priority {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.energy-limited {
+  background: #ffedd5;
+  color: #9a3412;
+}
+
+.fault {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+/* EV */
+
+.ev-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px,1fr));
+  gap: 20px;
+}
+
+.ev-card {
+  background: white;
+  padding: 22px;
+  border-radius: 14px;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+}
+
+.ev-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ev-header h2 {
+  margin: 0;
+}
+
+.ev-connection {
+  padding: 6px 10px;
+  border-radius: 15px;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.ev-connected {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.ev-disconnected {
+  background: #e5e7eb;
+  color: #6b7280;
+}
+
+.battery-row {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 22px;
+  margin-bottom: 8px;
+}
+
+.battery {
+  height: 15px;
+  background: #e5e7eb;
+  border-radius: 20px;
+  overflow: hidden;
+}
+
+.battery-fill {
+  height: 100%;
+  background: #22c55e;
+  transition: width 0.4s;
+}
+
+.ev-power {
+  font-size: 27px;
+  font-weight: bold;
+  margin-top: 20px;
+}
+
+.ev-status {
+  margin-top: 12px;
+  font-weight: bold;
+}
+
+.charging {
+  color: #16a34a;
+}
+
+.limited {
+  color: #d97706;
+}
+
+.offline {
+  color: #6b7280;
+}
+
+footer {
+  text-align: center;
+  padding: 30px;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+</style>
+</head>
+
+
+<body>
+
+<header>
+
+<h1>⚡ Smart EV Charging & Energy Management System</h1>
+
+<div id="mqttStatus" class="connection disconnected">
+● MQTT DISCONNECTED
+</div>
+
+</header>
+
+
+<div class="container">
+
+<h2 class="section-title">Energy Sources</h2>
+
+<div class="grid">
+
+<div class="card energy-card">
+
+<div class="card-title">☀ Solar Generation</div>
+
+<span id="solarPower" class="value">0.0</span>
+<span class="unit">kW</span>
+
+<div class="energy-bar">
+<div id="solarBar" class="energy-fill solar-fill"></div>
+</div>
+
+</div>
+
+
+<div class="card energy-card">
+
+<div class="card-title">⚡ Grid Supply</div>
+
+<span id="gridPower" class="value">0.0</span>
+<span class="unit">kW</span>
+
+<div class="energy-bar">
+<div id="gridBar" class="energy-fill grid-fill"></div>
+</div>
+
+</div>
+
+
+<div class="card energy-card">
+
+<div class="card-title">Total Available Energy</div>
+
+<span id="availablePower" class="value">0.0</span>
+<span class="unit">kW</span>
+
+<div class="energy-bar">
+<div id="availableBar" class="energy-fill available-fill"></div>
+</div>
+
+</div>
+
+
+<div class="card">
+
+<div class="card-title">Station Temperature</div>
+
+<span id="temperature" class="value">--</span>
+<span class="unit">°C</span>
+
+</div>
+
+</div>
+
+
+<h2 class="section-title">Charging Station</h2>
+
+<div class="station-panel">
+
+<div class="load-row">
+
+<strong>EV Charging Load</strong>
+
+<span>
+<span id="stationLoad">0.0</span>
+/
+<span id="stationLimit">20.0</span>
+kW
+</span>
+
+</div>
+
+<div class="load-bar">
+<div id="stationLoadBar" class="load-fill"></div>
+</div>
+
+<div id="systemStatus" class="status normal">
+SYSTEM STATUS: WAITING FOR DATA
+</div>
+
+</div>
+
+
+<h2 class="section-title">Charging Ports</h2>
+
+<div class="ev-grid">
+
+
+<!-- EV1 -->
+
+<div class="ev-card">
+
+<div class="ev-header">
+
+<h2>EV 01</h2>
+
+<span id="ev1Connection"
+class="ev-connection ev-disconnected">
+DISCONNECTED
+</span>
+
+</div>
+
+<div class="battery-row">
+<span>Battery SOC</span>
+<strong id="ev1Soc">0%</strong>
+</div>
+
+<div class="battery">
+<div id="ev1Battery" class="battery-fill"></div>
+</div>
+
+<div class="ev-power">
+<span id="ev1Power">0.0</span> kW
+</div>
+
+<div id="ev1Status" class="ev-status offline">
+OFFLINE
+</div>
+
+</div>
+
+
+<!-- EV2 -->
+
+<div class="ev-card">
+
+<div class="ev-header">
+
+<h2>EV 02</h2>
+
+<span id="ev2Connection"
+class="ev-connection ev-disconnected">
+DISCONNECTED
+</span>
+
+</div>
+
+<div class="battery-row">
+<span>Battery SOC</span>
+<strong id="ev2Soc">0%</strong>
+</div>
+
+<div class="battery">
+<div id="ev2Battery" class="battery-fill"></div>
+</div>
+
+<div class="ev-power">
+<span id="ev2Power">0.0</span> kW
+</div>
+
+<div id="ev2Status" class="ev-status offline">
+OFFLINE
+</div>
+
+</div>
+
+
+<!-- EV3 -->
+
+<div class="ev-card">
+
+<div class="ev-header">
+
+<h2>EV 03</h2>
+
+<span id="ev3Connection"
+class="ev-connection ev-disconnected">
+DISCONNECTED
+</span>
+
+</div>
+
+<div class="battery-row">
+<span>Battery SOC</span>
+<strong id="ev3Soc">0%</strong>
+</div>
+
+<div class="battery">
+<div id="ev3Battery" class="battery-fill"></div>
+</div>
+
+<div class="ev-power">
+<span id="ev3Power">0.0</span> kW
+</div>
+
+<div id="ev3Status" class="ev-status offline">
+OFFLINE
+</div>
+
+</div>
+
+</div>
+
+</div>
+
+
+<footer>
+ESP32 • Wokwi • Solar • Grid • MQTT • Energy Management System
+</footer>
+
+
+<script>
+
+const broker =
+"wss://broker.hivemq.com:8884/mqtt";
+
+const topicBase =
+"smartEV/demo7F3A";
+
+const client = mqtt.connect(
+broker,
+{
+clientId:
+"EV-Dashboard-" +
+Math.random().toString(16).substring(2),
+
+clean: true,
+reconnectPeriod: 2000
+}
+);
+
+
+let stationLoad = 0;
+let stationLimit = 20;
+
+let evData = {
+
+ev1: {
+soc: 0,
+power: 0,
+connected: false
+},
+
+ev2: {
+soc: 0,
+power: 0,
+connected: false
+},
+
+ev3: {
+soc: 0,
+power: 0,
+connected: false
+}
+
+};
+
+
+client.on("connect", function() {
+
+const status =
+document.getElementById("mqttStatus");
+
+status.textContent =
+"● MQTT CONNECTED";
+
+status.className =
+"connection connected";
+
+client.subscribe(
+topicBase + "/#"
+);
+
+});
+
+
+client.on("offline", function() {
+
+const status =
+document.getElementById("mqttStatus");
+
+status.textContent =
+"● MQTT DISCONNECTED";
+
+status.className =
+"connection disconnected";
+
+});
+
+
+client.on("message",
+function(topic, message) {
+
+const value =
+message.toString();
+
+
+/* EV1 */
+
+if(topic === topicBase + "/ev1/soc") {
+evData.ev1.soc = Number(value);
+}
+
+else if(topic === topicBase + "/ev1/power") {
+evData.ev1.power = Number(value);
+}
+
+else if(topic === topicBase + "/ev1/connected") {
+evData.ev1.connected = value === "1";
+}
+
+
+/* EV2 */
+
+else if(topic === topicBase + "/ev2/soc") {
+evData.ev2.soc = Number(value);
+}
+
+else if(topic === topicBase + "/ev2/power") {
+evData.ev2.power = Number(value);
+}
+
+else if(topic === topicBase + "/ev2/connected") {
+evData.ev2.connected = value === "1";
+}
+
+
+/* EV3 */
+
+else if(topic === topicBase + "/ev3/soc") {
+evData.ev3.soc = Number(value);
+}
+
+else if(topic === topicBase + "/ev3/power") {
+evData.ev3.power = Number(value);
+}
+
+else if(topic === topicBase + "/ev3/connected") {
+evData.ev3.connected = value === "1";
+}
+
+
+/* STATION */
+
+else if(topic === topicBase + "/station/load") {
+
+stationLoad = Number(value);
+
+updateStation();
+
+}
+
+else if(topic === topicBase + "/station/limit") {
+
+stationLimit = Number(value);
+
+updateStation();
+
+}
+
+else if(
+topic ===
+topicBase + "/station/temperature"
+) {
+
+document.getElementById(
+"temperature"
+).textContent =
+Number(value).toFixed(1);
+
+}
+
+else if(
+topic ===
+topicBase + "/station/status"
+) {
+
+updateStatus(value);
+
+}
+
+
+/* SOLAR */
+
+else if(
+topic ===
+topicBase + "/energy/solar"
+) {
+
+let solar =
+Number(value);
+
+document.getElementById(
+"solarPower"
+).textContent =
+solar.toFixed(1);
+
+document.getElementById(
+"solarBar"
+).style.width =
+Math.min(
+(solar / 8) * 100,
+100
+) + "%";
+
+}
+
+
+/* GRID */
+
+else if(
+topic ===
+topicBase + "/energy/grid"
+) {
+
+let grid =
+Number(value);
+
+document.getElementById(
+"gridPower"
+).textContent =
+grid.toFixed(1);
+
+document.getElementById(
+"gridBar"
+).style.width =
+Math.min(
+(grid / 12) * 100,
+100
+) + "%";
+
+}
+
+
+/* AVAILABLE ENERGY */
+
+else if(
+topic ===
+topicBase + "/energy/available"
+) {
+
+let available =
+Number(value);
+
+document.getElementById(
+"availablePower"
+).textContent =
+available.toFixed(1);
+
+document.getElementById(
+"availableBar"
+).style.width =
+Math.min(
+(available / 20) * 100,
+100
+) + "%";
+
+}
+
+
+updateEV("ev1", evData.ev1);
+updateEV("ev2", evData.ev2);
+updateEV("ev3", evData.ev3);
+
+});
+
+
+function updateStation() {
+
+document.getElementById(
+"stationLoad"
+).textContent =
+stationLoad.toFixed(1);
+
+document.getElementById(
+"stationLimit"
+).textContent =
+stationLimit.toFixed(1);
+
+let percentage =
+stationLimit > 0
+?
+(stationLoad / stationLimit) * 100
+:
+0;
+
+document.getElementById(
+"stationLoadBar"
+).style.width =
+Math.min(
+percentage,
+100
+) + "%";
+
+}
+
+
+function updateEV(ev, data) {
+
+document.getElementById(
+ev + "Soc"
+).textContent =
+data.soc + "%";
+
+document.getElementById(
+ev + "Battery"
+).style.width =
+data.soc + "%";
+
+document.getElementById(
+ev + "Power"
+).textContent =
+data.power.toFixed(1);
+
+
+const connection =
+document.getElementById(
+ev + "Connection"
+);
+
+const status =
+document.getElementById(
+ev + "Status"
+);
+
+
+if(data.connected) {
+
+connection.textContent =
+"CONNECTED";
+
+connection.className =
+"ev-connection ev-connected";
+
+
+if(data.soc >= 100) {
+
+status.textContent =
+"CHARGING COMPLETE";
+
+status.className =
+"ev-status charging";
+
+}
+
+else if(
+data.power > 0 &&
+data.power < 7.15
+) {
+
+status.textContent =
+"POWER LIMITED";
+
+status.className =
+"ev-status limited";
+
+}
+
+else if(
+data.power >= 7.15
+) {
+
+status.textContent =
+"CHARGING";
+
+status.className =
+"ev-status charging";
+
+}
+
+else {
+
+status.textContent =
+"WAITING";
+
+status.className =
+"ev-status offline";
+
+}
+
+}
+
+else {
+
+connection.textContent =
+"DISCONNECTED";
+
+connection.className =
+"ev-connection ev-disconnected";
+
+status.textContent =
+"OFFLINE";
+
+status.className =
+"ev-status offline";
+
+}
+
+}
+
+
+function updateStatus(status) {
+
+const box =
+document.getElementById(
+"systemStatus"
+);
+
+box.textContent =
+"SYSTEM STATUS: " +
+status;
+
+
+if(status === "NORMAL") {
+
+box.className =
+"status normal";
+
+}
+
+else if(
+status.includes("ENERGY LIMITED")
+) {
+
+box.className =
+"status energy-limited";
+
+}
+
+else if(
+status.includes("PRIORITY")
+) {
+
+box.className =
+"status priority";
+
+}
+
+else {
+
+box.className =
+"status fault";
+
+}
+
+}
+
+</script>
+
+</body>
+
+</html>
